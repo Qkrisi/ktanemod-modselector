@@ -326,6 +326,7 @@ public class ModSelectorService : MonoBehaviour
         _properties.Add("AddPageMethod", () => (Action<KMSelectable>)PageManager.AddPagePrefab, null);
         _properties.Add("AddPagesMethod", () => (Action<KMSelectable[]>)PageManager.AddPagePrefabs, null);
         _properties.Add("AddHomePageMethod", () => (Action<string, KMSelectable, Texture2D>)PageManager.AddHomePageEntry, null);
+        _properties.Add("AddRoomHomePageMethod", () => (Action<string, KMSelectable, Texture2D, KMHoldable.HoldableAvailabilityEnum>)PageManager.AddRoomHomePageEntry, null);
         _properties.Add("GoToPageMethod", () => (Action<string>)FindObjectOfType<PageNavigation>().GoToPage, null);
         _properties.Add("GoBackMethod", () => (Action)FindObjectOfType<PageNavigation>().GoBack, null);
 
@@ -380,6 +381,7 @@ public class ModSelectorService : MonoBehaviour
     #region Setup
     private void OnStateChange(KMGameInfo.State state)
     {
+        PageManager.CurrentState = state;
         if (_updateRequired && state == KMGameInfo.State.Setup)
         {
             //Update the mod info

@@ -8,7 +8,22 @@ public class PageManager : MonoBehaviour
         public string DisplayName;
         public KMSelectable PageSelectable;
         public Texture2D Icon;
+        public KMHoldable.HoldableAvailabilityEnum Availability;
+
+        public bool Enabled
+        {
+            get
+            {
+                return Availability == KMHoldable.HoldableAvailabilityEnum.ALL ||
+                       Availability == KMHoldable.HoldableAvailabilityEnum.SETUP &&
+                       CurrentState == KMGameInfo.State.Setup ||
+                       Availability == KMHoldable.HoldableAvailabilityEnum.GAMEPLAY &&
+                       CurrentState == KMGameInfo.State.Gameplay;
+            }
+        }
     }
+
+    public static KMGameInfo.State CurrentState = KMGameInfo.State.Setup;
 
     public Transform RootTransform = null;
 
@@ -76,7 +91,12 @@ public class PageManager : MonoBehaviour
 
     public static void AddHomePageEntry(string displayName, KMSelectable pageSelectable, Texture2D icon)
     {
-        HomePageEntryList.Add(new HomePageEntry() { DisplayName = displayName, PageSelectable = pageSelectable, Icon = icon });
+        HomePageEntryList.Add(new HomePageEntry() { DisplayName = displayName, PageSelectable = pageSelectable, Icon = icon, Availability = KMHoldable.HoldableAvailabilityEnum.SETUP});
+    }
+
+    public static void AddRoomHomePageEntry(string displayName, KMSelectable pageSelectable, Texture2D icon, KMHoldable.HoldableAvailabilityEnum availability)
+    {
+        HomePageEntryList.Add(new HomePageEntry() { DisplayName = displayName, PageSelectable = pageSelectable, Icon = icon, Availability = availability});
     }
 
     public void DestroyCachedPages()

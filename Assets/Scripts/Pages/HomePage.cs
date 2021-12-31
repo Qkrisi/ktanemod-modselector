@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections;
+using System.Linq;
 using UnityEngine;
 
 public class HomePage : MonoBehaviour
@@ -16,7 +17,14 @@ public class HomePage : MonoBehaviour
 
     private void OnEnable()
     {
-        _homePageEntries = PageManager.HomePageEntries.ToArray();
+        StartCoroutine(DisplayPages());
+    }
+    
+    private IEnumerator DisplayPages()
+    {
+        yield return new WaitUntil(() => PageManager.CurrentState != KMGameInfo.State.Transitioning);
+        
+        _homePageEntries = PageManager.HomePageEntries.Where(page => page.Enabled).ToArray();
 
         for (int pageLinkIndex = 0; pageLinkIndex < _pageLinks.Length; ++pageLinkIndex)
         {
@@ -37,5 +45,8 @@ public class HomePage : MonoBehaviour
             element.Icon = homePageEntry.Icon;
             pageLink.PagePrefab = homePageEntry.PageSelectable;
         }
+
+        if(_homePageEntries.Length == 0)
+            Destroy(ModSelectorTablet.Instance.gameObject);
     }
 }
