@@ -1,10 +1,10 @@
-﻿using UnityEngine;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using UnityEditor;
 using System.Linq;
-using System;
 using System.Reflection;
+using UnityEditor;
+using UnityEngine;
 
 /// <summary>
 /// 
@@ -29,7 +29,7 @@ public class AssetBundler
     /// <summary>
     /// List of managed assemblies to ignore in the build (because they already exist in KTaNE itself)
     /// </summary>
-    static List<string> EXCLUDED_ASSEMBLIES = new List<string> { "KMFramework.dll" };
+    static List<string> EXCLUDED_ASSEMBLIES = new List<string> { "KMFramework.dll", "0Harmony.dll" };
 
     /// <summary>
     /// Location of MSBuild.exe tool
@@ -62,6 +62,11 @@ public class AssetBundler
     /// List of MonoScripts modified during the bundling process that need to be restored after.
     /// </summary>
     private List<string> scriptPathsToRestore = new List<string>();
+    
+    /// <summary>
+    /// A variable for holding the current BuildTarget, for Mac compatibility.
+    /// </summary>
+    BuildTarget target = BuildTarget.StandaloneWindows;
     #endregion
 
     [MenuItem("Keep Talking ModKit/Build AssetBundle _F6", priority = 10)]
@@ -92,6 +97,7 @@ public class AssetBundler
 
         bundler.assemblyName = ModConfig.ID;
         bundler.outputFolder = ModConfig.OutputFolder + "/" + bundler.assemblyName;
+        if (Application.platform == RuntimePlatform.OSXEditor) bundler.target = BuildTarget.StandaloneOSX;
 
         bool success = false;
 
@@ -110,6 +116,8 @@ public class AssetBundler
             //Update material info components for future compatibility checks
             bundler.UpdateMaterialInfo();
 
+			bool UseHarmony = false;
+
             //Build the assembly using either MSBuild or Unity EditorUtility methods
             if (useMSBuild)
             {
@@ -121,10 +129,10 @@ public class AssetBundler
             }
 
             //Copy any other non-Editor managed assemblies to the output folder
-            bundler.CopyManagedAssemblies();
+            bundler.CopyManagedAssemblies(ref UseHarmony);
 
             //Create the modInfo.json file and copy the preview image if available
-            bundler.CreateModInfo();
+            bundler.CreateModInfo(UseHarmony);
 
             //Copy the modSettings.json file from Assets into the build
             bundler.CopyModSettings();
@@ -238,20 +246,7 @@ public class AssetBundler
             .Select(path => "Assets/Plugins/Managed/" + Path.GetFileNameWithoutExtension(path))
             .ToList();
 
-        string unityAssembliesLocation;
-        switch (System.Environment.OSVersion.Platform)
-        {
-            case PlatformID.MacOSX:
-            case PlatformID.Unix:
-                unityAssembliesLocation = EditorApplication.applicationPath.Replace("Unity.app", "Unity.app/Contents/Managed/");
-                break;
-            case PlatformID.Win32NT:
-            default:
-                unityAssembliesLocation = EditorApplication.applicationPath.Replace("Unity.exe", "Data/Managed/");
-                break;
-        }
-
-        managedReferences.Add(unityAssembliesLocation + "UnityEngine");
+        managedReferences.Add(Path.Combine(EditorApplication.applicationContentsPath, "Managed/UnityEngine"));
 
         //Next we need to grab some type references and use reflection to build things the way Unity does.
         //Note that EditorUtility.CompileCSharp will do *almost* exactly the same thing, but it unfortunately
@@ -265,7 +260,7 @@ public class AssetBundler
         int apiCompatibilityLevel = 1; //NET_2_0 compatibility level is enum value 1
         Assembly assembly = Assembly.GetAssembly(typeof(MonoScript));
         var monoIslandType = assembly.GetType("UnityEditor.Scripting.MonoIsland");
-        object monoIsland = Activator.CreateInstance(monoIslandType, BuildTarget.StandaloneWindows, apiCompatibilityLevel, scriptArray, referenceArray, defineArray, outputFilename);
+        object monoIsland = Activator.CreateInstance(monoIslandType, target, apiCompatibilityLevel, scriptArray, referenceArray, defineArray, outputFilename);
 
         //MonoCompiler itself
         var monoCompilerType = assembly.GetType("UnityEditor.Scripting.Compilers.MonoCSharpCompiler");
@@ -379,18 +374,20 @@ public class AssetBundler
     /// <summary>
     /// Copy all managed non-Editor assemblies to the OUTPUT_FOLDER for inclusion alongside the mod bundle.
     /// </summary>
-    protected void CopyManagedAssemblies()
+    protected void CopyManagedAssemblies(ref bool UseHarmony)
     {
         IEnumerable<string> assetPaths = AssetDatabase.GetAllAssetPaths().Where(path => path.EndsWith(".dll") && path.StartsWith("Assets/Plugins"));
 
         //Now find any other managed plugins that should be included, other than the EXCLUDED_ASSEMBLIES list
         foreach (string assetPath in assetPaths)
-        {
+        {	
             var pluginImporter = AssetImporter.GetAtPath(assetPath) as PluginImporter;
 
             if (pluginImporter != null && !pluginImporter.isNativePlugin && pluginImporter.GetCompatibleWithAnyPlatform())
             {
                 string assetName = Path.GetFileName(assetPath);
+                if(assetName == "0Harmony.dll")
+					UseHarmony = true;
                 if (!EXCLUDED_ASSEMBLIES.Contains(assetName))
                 {
                     string dest = Path.Combine(outputFolder, Path.GetFileName(assetPath));
@@ -423,7 +420,7 @@ public class AssetBundler
         BuildPipeline.BuildAssetBundles(
             TEMP_BUILD_FOLDER, 
             BuildAssetBundleOptions.DeterministicAssetBundle | BuildAssetBundleOptions.CollectDependencies, 
-            BuildTarget.StandaloneWindows);
+            target);
 #pragma warning restore 618
 
         //We are only interested in the BUNDLE_FILENAME bundle (and not the extra AssetBundle or the manifest files
@@ -436,14 +433,28 @@ public class AssetBundler
     /// <summary>
     /// Creates a modInfo.json file and puts it in the OUTPUT_FOLDER.
     /// </summary>
-    protected void CreateModInfo()
+    protected void CreateModInfo(bool UseHarmony)
     {
-        File.WriteAllText(outputFolder + "/modInfo.json", ModConfig.Instance.ToJson());
+        File.WriteAllText(outputFolder + (UseHarmony ? "/modInfo_Harmony.json" : "/modInfo.json"), ModConfig.Instance.ToJson());
 
         if(ModConfig.PreviewImage != null)
         {
-            byte[] bytes = ModConfig.PreviewImage.EncodeToPNG();
-            File.WriteAllBytes(outputFolder + "/previewImage.png", bytes);
+            string previewImageAssetPath = AssetDatabase.GetAssetPath(ModConfig.PreviewImage);
+
+            if (!string.IsNullOrEmpty(previewImageAssetPath))
+            {
+                TextureImporter importer = AssetImporter.GetAtPath(previewImageAssetPath) as TextureImporter;
+
+                if (!importer.isReadable || importer.textureCompression != TextureImporterCompression.Uncompressed)
+                {
+                    importer.isReadable = true;
+                    importer.textureCompression = TextureImporterCompression.Uncompressed;
+                    importer.SaveAndReimport();
+                }
+
+                byte[] bytes = ModConfig.PreviewImage.EncodeToPNG();
+                File.WriteAllBytes(outputFolder + "/previewImage.png", bytes);
+            }
         }
     }
 
@@ -621,10 +632,16 @@ public class AssetBundler
                     {
                         if (material == null)
                         {
-                            Debug.LogWarning(string.Format("Renderer {0} has an empty material entry!", renderer.name));
+                            var obj = renderer.transform;
+                            var str = new List<string>();
+                            while (obj != null)
+                            {
+                                str.Add(obj.gameObject.name);
+                                obj = obj.parent;
+                            }
+                            Debug.LogWarningFormat("There is an unassigned material on the following object: {0}", string.Join(" > ", str.ToArray()));
                             continue;
                         }
-
                         materialInfo.ShaderNames.Add(material.shader.name);
 
                         if(material.shader.name == "Standard")

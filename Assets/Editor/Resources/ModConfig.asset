@@ -13,6 +13,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: ModSelector
   title: Mod Selector
+  author: Bashly
   description: "[h1]Info[/h1]\r\nThis mod adds some additional UI to allow dynamic
     selection/veto of all loaded mods. Deselecting mods will make them unavailable
     in Free Play mode and any missions that would normally require them.\r\n\r\nThis
@@ -36,6 +37,6 @@ MonoBehaviour:
     mods installed.\r\nAs of v2.0.0, the Mod Selector is now a world-space object,
     much like the bomb binder, with dynamic profile merging and 2 modes of merging.\nAs
     of v2.5.0, Expert-style profiles work based on a EnableList rather than the DisableList."
-  version: v2.6.1
+  version: v2.7.1
   outputFolder: E:\Games\SteamLibrary\steamapps\common\Keep Talking and Nobody Explodes\mods
   previewImage: {fileID: 2800000, guid: 3635e2c54a9c5ee4e9896ba11c4f5a43, type: 3}

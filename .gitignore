@@ -32,3 +32,4 @@ sysinfo.txt
 \.vs/config/applicationhost\.config
 
 .vs/
+.idea/
